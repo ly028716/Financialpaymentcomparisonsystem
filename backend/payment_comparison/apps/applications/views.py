@@ -43,7 +43,7 @@ class ApplicationListAPIView(generics.ListCreateAPIView):
         queryset = PaymentApplication.objects.all()
 
         # 根据角色过滤数据
-        if user.role == 'applicant':
+        if hasattr(user, 'role') and user.role == 'applicant':
             # 部门申请人只能看到自己的申请
             queryset = queryset.filter(applicant=user.name, department=user.department)
 
@@ -127,8 +127,8 @@ class ApplicationListAPIView(generics.ListCreateAPIView):
         return ApiResponse.paginated(
             data=serializer.data,
             total=queryset.count(),
-            page=request.query_params.get('page', 1),
-            page_size=request.query_params.get('page_size', 20)
+            page=int(request.query_params.get('page', 1)),
+            page_size=int(request.query_params.get('page_size', 20))
         )
 
 

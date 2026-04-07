@@ -169,8 +169,8 @@ class PaymentListAPIView(generics.ListCreateAPIView):
         return ApiResponse.paginated(
             data=serializer.data,
             total=queryset.count(),
-            page=request.query_params.get('page', 1),
-            page_size=request.query_params.get('page_size', 20)
+            page=int(request.query_params.get('page', 1)),
+            page_size=int(request.query_params.get('page_size', 20))
         )
 
 
@@ -339,6 +339,11 @@ class OCRAPIView(APIView):
 
     def post(self, request):
         from rest_framework.parsers import MultiPartParser, FormParser
+        from django.conf import settings
+        from .ocr_service import AliOCRService
+        import logging
+
+        logger = logging.getLogger(__name__)
 
         # 检查是否有文件上传
         if 'file' not in request.FILES:
@@ -355,24 +360,36 @@ class OCRAPIView(APIView):
         if file.size > 10 * 1024 * 1024:
             return ApiResponse.error(400, '文件大小不能超过10MB')
 
-        # 这里应该调用实际的OCR服务
-        # 目前返回模拟数据
-        ocr_result = self._mock_ocr_result(file)
+        # 检查OCR服务是否启用
+        if not settings.OCR_ENABLED:
+            return ApiResponse.error(
+                503,
+                'OCR服务未配置，请设置DASHSCOPE_API_KEY环境变量',
+                {'fallback': '请手动录入付款信息'}
+            )
 
-        return ApiResponse.success(
-            data=ocr_result,
-            message='OCR识别成功'
-        )
+        try:
+            # 调用OCR服务
+            ocr_service = AliOCRService(settings.DASHSCOPE_API_KEY)
+            ocr_result = ocr_service.recognize_bank_receipt(file)
 
-    def _mock_ocr_result(self, file):
-        """模拟OCR识别结果（实际应调用百度/腾讯OCR API）"""
-        return {
-            'payee_name': '',
-            'payee_account': '',
-            'amount': None,
-            'bank_serial_no': '',
-            'payment_date': None,
-            'confidence': 0.0,
-            'raw_text': 'OCR识别功能需要配置百度/腾讯OCR服务',
-            'message': 'OCR服务未配置，请手动录入信息'
-        }
+            # 序列化结果
+            serializer = OCRResultSerializer(data=ocr_result)
+            if serializer.is_valid():
+                return ApiResponse.success(
+                    data=serializer.data,
+                    message='OCR识别成功'
+                )
+            else:
+                logger.error(f'OCR结果序列化失败: {serializer.errors}')
+                return ApiResponse.error(400, '识别结果格式错误', serializer.errors)
+
+        except Exception as e:
+            # 记录错误日志
+            logger.error(f'OCR识别失败: {str(e)}', exc_info=True)
+
+            return ApiResponse.error(
+                500,
+                f'OCR识别失败: {str(e)}',
+                {'fallback': '请手动录入付款信息'}
+            )

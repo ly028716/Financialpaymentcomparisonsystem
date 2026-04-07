@@ -137,3 +137,8 @@ REDIS_DB = 0
 # 文件存储配置
 FILE_STORAGE = 'local'  # local / minio / oss
 UPLOAD_DIR = BASE_DIR / 'uploads'
+
+# 阿里云OCR配置
+DASHSCOPE_API_KEY = os.environ.get('DASHSCOPE_API_KEY', '')
+OCR_ENABLED = bool(DASHSCOPE_API_KEY)
+OCR_TIMEOUT = 30  # 超时时间（秒）
