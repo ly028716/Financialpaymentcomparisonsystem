@@ -24,10 +24,11 @@
         <el-form-item label="收款方账号" prop="payee_account">
           <el-input
             v-model="form.payee_account"
-            placeholder="请输入收款方账号（10-30位数字）"
-            maxlength="30"
+            placeholder="请输入收款方账号（15-19位数字）"
+            maxlength="19"
             show-word-limit
           />
+          <div class="form-tip">提示：账号必须是有效的银行卡号</div>
         </el-form-item>
 
         <el-form-item label="开户行" prop="payee_bank">
@@ -92,6 +93,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { applicationApi } from '@/api'
+import { luhnCheck } from '@/utils/bankAccount'
 
 // 定义表单数据类型
 interface ApplicationForm {
@@ -112,7 +114,7 @@ const form = reactive<ApplicationForm>({
   payee_name: '',
   payee_account: '',
   payee_bank: '',
-  amount: 0,
+  amount: undefined as any,
   purpose: '',
   urgent: false,
   remark: ''
@@ -134,8 +136,10 @@ const validatePayeeName = (_rule: any, value: string, callback: any) => {
 const validatePayeeAccount = (_rule: any, value: string, callback: any) => {
   if (!value) {
     callback(new Error('请输入收款方账号'))
-  } else if (!/^[0-9]{10,30}$/.test(value)) {
-    callback(new Error('账号格式不正确（10-30位数字）'))
+  } else if (!/^[0-9]{15,19}$/.test(value)) {
+    callback(new Error('账号格式不正确（15-19位数字）'))
+  } else if (!luhnCheck(value)) {
+    callback(new Error('账号校验失败，请检查账号是否正确'))
   } else {
     callback()
   }
@@ -152,8 +156,8 @@ const validatePayeeBank = (_rule: any, value: string, callback: any) => {
 }
 
 const validateAmount = (_rule: any, value: number, callback: any) => {
-  if (!value || value <= 0) {
-    callback(new Error('请输入有效的付款金额'))
+  if (value === undefined || value === null || value === 0) {
+    callback(new Error('请输入付款金额'))
   } else if (value < 0.01) {
     callback(new Error('金额必须大于 0.01'))
   } else if (value > 999999999.99) {
@@ -200,11 +204,11 @@ const handleSubmit = async () => {
   } catch (error: any) {
     // 仅在开发环境输出错误信息
     if (import.meta.env.DEV) {
-      console.error('提交失败', error)
+      console.error('提交失败:', error?.message || error)
     }
 
     // 显示具体错误信息
-    const message = error?.response?.data?.message || '提交失败，请稍后重试'
+    const message = error?.response?.data?.message || error?.response?.data?.data?.payee_account?.[0] || '提交失败，请稍后重试'
     ElMessage.error(message)
   } finally {
     loading.value = false
@@ -219,6 +223,13 @@ const handleSubmit = async () => {
 
 .amount-input {
   width: 100%;
+  max-width: 300px;
+}
+
+.form-tip {
+  font-size: 12px;
+  color: #909399;
+  margin-top: 4px;
 }
 
 /* 响应式调整 */
